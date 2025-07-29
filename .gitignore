@@ -1,0 +1,29 @@
+# Ignorar entornos virtuales de Python
+/backend/venv/
+/backend/__pycache__/
+/backend/.pytest_cache/
+
+# Ignorar dependencias de Node.js
+/frontend-admin/node_modules/
+/mobile-messenger/node_modules/
+
+# Ignorar archivos de build/distribución
+/frontend-admin/dist/
+/frontend-admin/.next/
+/frontend-admin/build/
+
+# Archivos de sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos de configuración de IDEs
+.idea/
+.vscode/
+
+# Archivos de entorno (muy importante para la seguridad)
+.env
+*.env
+*.env.*
+
+# Datos de la base de datos de Docker
+/db-data/

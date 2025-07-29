@@ -1,0 +1,41 @@
+/* Importa todas las clases base, de componentes y de utilidades de Tailwind.
+   Esto es para el método con el plugin @tailwindcss/vite. */
+@import "tailwindcss";
+
+/* 
+  Usamos @layer para definir explícitamente nuestras utilidades de color personalizadas.
+  Esto asegura que se generen incluso si el escaneo de 'content' falla,
+  y las agrupa correctamente en la cascada de CSS de Tailwind.
+*/
+@layer utilities {
+  .bg-darkser {
+    background-color: #1a6329;
+  }
+  .text-darkser {
+    color: #1a6329;
+  }
+  .hover\:bg-darkser:hover {
+    background-color: #1a6329;
+  }
+
+  .bg-ser {
+    background-color: #009300;
+  }
+  .text-ser {
+    color: #009300;
+  }
+  .focus\:ring-ser:focus {
+    --tw-ring-color: #009300;
+  }
+  .hover\:bg-ser:hover {
+    background-color: #009300;
+  }
+
+  .bg-lightser {
+    background-color: #E3E7D3;
+  }
+  
+  .bg-whiteser {
+    background-color: #BDC2BF;
+  }
+}

@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  db:
+    # Cambiamos la imagen de 'postgres:15-alpine' a la imagen oficial de PostGIS
+    image: postgis/postgis:15-3.4 
+    container_name: farmacia_db
+    # El resto de la configuración (environment, volumes, ports, networks)
+    # permanece exactamente igual.
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    ports:
+      - "5432:5432"
+    networks:
+      - farmacia_net
+
+  # Servicio del Backend FastAPI
+  backend:
+    container_name: farmacia_backend
+    build:
+      context: ./backend
+    command: ["/app/scripts/wait-for-postgres.sh", "db", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    volumes:
+      - ./backend/app:/app/app
+      - uploaded_files:/app/uploads
+    ports:
+      - "8000:8000"
+    # La sección 'environment' ahora solo define DATABASE_URL y hereda el resto
+    
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_WHATSAPP_NUMBER=${TWILIO_WHATSAPP_NUMBER}
+      - ORS_API_KEY=${ORS_API_KEY}
+    depends_on:
+      - db
+    networks:
+      - farmacia_net
+  
+  mobile_app:
+    container_name: farmacia_mobile_app
+    # Le decimos que construya usando el nuevo Dockerfile
+    build:
+      context: ./mobile-messenger
+    # Mapeamos el puerto 8550 del contenedor al 8550 de tu máquina
+    ports:
+      - "8550:8550"
+    # Montamos el código para ver los cambios en tiempo real
+    volumes:
+      - ./mobile-messenger:/app
+    # Pasamos la clave de licencia desde el archivo .env
+    environment:
+      - DYNAMSOFT_LICENSE_KEY=${DYNAMSOFT_LICENSE_KEY}
+
+volumes:
+  postgres_data:
+  uploaded_files:
+
+networks:
+  farmacia_net:
+    driver: bridge

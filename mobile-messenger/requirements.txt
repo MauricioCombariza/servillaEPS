@@ -1,0 +1,4 @@
+# mobile-messenger/requirements.txt
+flet
+python-dotenv
+flet_desktop
