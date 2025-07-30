@@ -17,6 +17,9 @@ import RecepcionPage from '../pages/Logistica/RecepcionPage';
 import AlistamientoPage from '../pages/Logistica/AlistamientoPage';
 import EmpaquePage from '../pages/Logistica/EmpaquePage';
 import ConciliacionPage from '../pages/Cierre/ConciliacionPage';
+import MobileLayout from '../components/layout/MobileLayout';
+import PaginaRutaMensajero from '../pages/Mensajero/PaginaRutaMensajero';
+import PaginaEscaner from '../pages/Mensajero/PaginaEscaner';
 
 // Creamos el enrutador con la estructura jerárquica
 const router = createBrowserRouter([
@@ -29,6 +32,14 @@ const router = createBrowserRouter([
     path: '/login',
     element: <LoginPage />,
   },
+  {
+          path: 'app-mensajero',
+          element: <MobileLayout />, // Usará el nuevo layout
+          children: [
+            { index: true, element: <PaginaRutaMensajero /> },
+            { path: 'escanear', element: <PaginaEscaner /> },
+          ]
+        },
   // Contenedor de rutas protegidas
   {
     path: '/',
