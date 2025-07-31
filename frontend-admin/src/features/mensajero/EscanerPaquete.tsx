@@ -1,4 +1,3 @@
-// frontend-admin/src/features/mensajero/EscanerPaquete.tsx
 import React, { useEffect, useRef } from 'react';
 import { 
   Html5Qrcode, 
@@ -6,8 +5,7 @@ import {
   Html5QrcodeSupportedFormats 
 } from 'html5-qrcode';
 import toast from 'react-hot-toast';
-// Importa tu archivo de sonido. Asegúrate de que la ruta sea correcta.
-import beepSound from '../../assets/sounds/beep.mp3';
+import beepSound from '../../assets/sounds/scan-beep.mp3';
 
 interface EscanerPaqueteProps {
   onScanSuccess: (codigo: string) => void;
@@ -16,84 +14,69 @@ interface EscanerPaqueteProps {
 const QRCODE_REGION_ID = "html5-qrcode-scanner-region";
 
 const EscanerPaquete: React.FC<EscanerPaqueteProps> = ({ onScanSuccess }) => {
-  // Referencia para la instancia del escáner
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  // Referencia para el objeto de audio, para crearlo solo una vez
   const audioRef = useRef(new Audio(beepSound));
-  // Bandera para prevenir la doble inicialización en StrictMode
   const effectRan = useRef(false);
 
   useEffect(() => {
-    // Guarda de StrictMode
     if (effectRan.current === true) {
       return;
     }
     effectRan.current = true;
 
-    // Configuración para el constructor de la librería
     const scannerConfig = { 
         verbose: false,
-        formatsToSupport: [ // Le decimos explícitamente qué formatos buscar
-            Html5QrcodeSupportedFormats.CODE_128, // Muy común en logística
-            Html5QrcodeSupportedFormats.EAN_13,   // Códigos de barras de productos
-            Html5QrcodeSupportedFormats.QR_CODE,  // Códigos QR
+        formatsToSupport: [
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.QR_CODE,
         ]
       };
 
-    // Creamos la instancia y la guardamos en la referencia
     const html5QrcodeScanner = new Html5Qrcode(QRCODE_REGION_ID, scannerConfig);
     scannerRef.current = html5QrcodeScanner;
 
-    // Callback de éxito de escaneo
     const qrCodeSuccessCallback = (decodedText: string, _decodedResult: any) => {
-      // Reproducimos el sonido de feedback
       audioRef.current.play().catch(e => console.error("Error al reproducir sonido:", e));
-      
-      // Llamamos a la función que nos pasaron por props
       onScanSuccess(decodedText);
-      
-      // Detenemos el escáner para evitar múltiples lecturas y apagar la cámara
-      if (scannerRef.current?.getState() === Html5QrcodeScannerState.SCANNING) {
-        scannerRef.current.stop().catch(err => {
-          console.error("Fallo al detener el escáner después del éxito.", err);
-        });
-      }
     };
     
-    // Configuración para la cámara y el visor
     const config = { 
-      fps: 20, // Aumentamos FPS para una detección más fluida
-      qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-        const boxSize = Math.floor(minEdge * 0.8);
-        return {
-          width: boxSize,
-          height: boxSize / 2, // Caja rectangular, optimizada para códigos de barras lineales
-        };
-      },
+      fps: 20, 
+      qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
+          width: Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.8),
+          height: Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.4),
+      }),
       rememberLastUsedCamera: true,
     };
 
-    // Iniciamos el escáner
     html5QrcodeScanner.start(
       { facingMode: "environment" },
       config,
       qrCodeSuccessCallback,
-      undefined // No necesitamos un callback de error continuo
-    ).catch((err) => {
+      undefined
+    ).catch((err: any) => { // <-- Añadimos tipo 'any' explícito al error aquí
       console.error("No se pudo iniciar el escáner:", err);
       if (err.name === 'NotAllowedError') {
         toast.error('Necesitas dar permiso para usar la cámara.');
       }
     });
 
-    // Función de limpieza que se ejecuta cuando el componente se desmonta
+    // --- LA CORRECCIÓN PRINCIPAL ESTÁ EN LA LIMPIEZA ---
     return () => {
       console.log("Limpiando el escáner.");
-      // Usamos .clear() que es un alias seguro de .stop()
-      scannerRef.current?.clear().catch(err => {
-        console.error("Fallo al limpiar el escáner al desmontar.", err);
-      });
+      
+      const scanner = scannerRef.current;
+      if (scanner && scanner.getState() === Html5QrcodeScannerState.SCANNING) {
+        // El método .stop() devuelve una Promise. Lo manejamos de forma segura.
+        scanner.stop()
+          .then(() => {
+            console.log("Escáner detenido exitosamente.");
+          })
+          .catch((err: any) => { // <-- Añadimos tipo 'any' explícito al error
+            console.error("Fallo al detener el escáner al desmontar.", err);
+          });
+      }
     };
   }, [onScanSuccess]);
 
