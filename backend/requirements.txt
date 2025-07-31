@@ -7,6 +7,7 @@ python-multipart
 twilio
 GeoAlchemy2
 openrouteservice
+gunicorn
 
 # Fijamos las versiones a unas estables y compatibles
 passlib==1.7.4
