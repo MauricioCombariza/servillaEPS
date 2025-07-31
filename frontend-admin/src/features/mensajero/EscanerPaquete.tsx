@@ -5,7 +5,7 @@ import {
   Html5QrcodeSupportedFormats 
 } from 'html5-qrcode';
 import toast from 'react-hot-toast';
-import beepSound from '../../assets/sounds/scan-beep.mp3';
+// import beepSound from '../../assets/sounds/scan-beep.mp3';
 
 interface EscanerPaqueteProps {
   onScanSuccess: (codigo: string) => void;
@@ -15,7 +15,7 @@ const QRCODE_REGION_ID = "html5-qrcode-scanner-region";
 
 const EscanerPaquete: React.FC<EscanerPaqueteProps> = ({ onScanSuccess }) => {
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  const audioRef = useRef(new Audio(beepSound));
+  const audioRef = useRef(new Audio('/beep.mp3'));
   const effectRan = useRef(false);
 
   useEffect(() => {
