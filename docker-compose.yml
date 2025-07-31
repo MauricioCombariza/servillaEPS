@@ -1,66 +1,52 @@
+# docker-compose.yml
+# Archivo de ejemplo para una configuración tipo producción.
+# Render.com NO usa este archivo directamente, pero sirve como referencia.
+
 version: '3.8'
 
 services:
+  # En producción, la base de datos debería ser un servicio gestionado (como el de Render).
+  # Este servicio 'db' es solo para un ejemplo de despliegue autocontenido.
   db:
-    # Cambiamos la imagen de 'postgres:15-alpine' a la imagen oficial de PostGIS
-    image: postgis/postgis:15-3.4 
-    container_name: farmacia_db
-    # El resto de la configuración (environment, volumes, ports, networks)
-    # permanece exactamente igual.
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+    image: postgres:15-alpine
+    container_name: farmacia_db_prod
+    env_file:
+      - .env.prod # Usaría un archivo de entorno de producción
     volumes:
-      - postgres_data:/var/lib/postgresql/data/
-    ports:
-      - "5432:5432"
+      - postgres_data_prod:/var/lib/postgresql/data/
     networks:
-      - farmacia_net
+      - farmacia_net_prod
+    # En producción, NO se recomienda exponer el puerto de la BD a internet.
 
-  # Servicio del Backend FastAPI
+  # Servicio del Backend FastAPI para producción
   backend:
-    container_name: farmacia_backend
+    container_name: farmacia_backend_prod
     build:
       context: ./backend
-    command: ["/app/scripts/wait-for-postgres.sh", "db", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
-    volumes:
-      - ./backend/app:/app/app
-      - uploaded_files:/app/uploads
-    ports:
-      - "8000:8000"
-    # La sección 'environment' ahora solo define DATABASE_URL y hereda el resto
+      # Usa el Dockerfile por defecto (el de producción)
+      dockerfile: Dockerfile 
     
-    environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
-      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
-      - TWILIO_WHATSAPP_NUMBER=${TWILIO_WHATSAPP_NUMBER}
-      - ORS_API_KEY=${ORS_API_KEY}
+    # El comando de inicio está definido dentro del Dockerfile con la instrucción CMD
+    
+    volumes:
+      # En producción, el código está DENTRO de la imagen. No montamos el código local.
+      # Solo montamos el volumen para los archivos subidos.
+      - uploaded_files_prod:/app/uploads
+
+    # No exponemos puertos directamente, un proxy inverso como Nginx se encargaría de eso.
+    
+    env_file:
+      - .env.prod # Carga las variables de entorno de producción
+
     depends_on:
       - db
     networks:
-      - farmacia_net
-  
-  mobile_app:
-    container_name: farmacia_mobile_app
-    # Le decimos que construya usando el nuevo Dockerfile
-    build:
-      context: ./mobile-messenger
-    # Mapeamos el puerto 8550 del contenedor al 8550 de tu máquina
-    ports:
-      - "8550:8550"
-    # Montamos el código para ver los cambios en tiempo real
-    volumes:
-      - ./mobile-messenger:/app
-    # Pasamos la clave de licencia desde el archivo .env
-    environment:
-      - DYNAMSOFT_LICENSE_KEY=${DYNAMSOFT_LICENSE_KEY}
+      - farmacia_net_prod
 
 volumes:
-  postgres_data:
-  uploaded_files:
+  postgres_data_prod:
+  uploaded_files_prod:
 
 networks:
-  farmacia_net:
+  farmacia_net_prod:
     driver: bridge

@@ -1,0 +1,55 @@
+# docker-compose.dev.yml
+# USAR CON: docker-compose -f docker-compose.dev.yml up --build
+
+version: '3.8'
+
+services:
+  # Servicio de la Base de Datos PostgreSQL para desarrollo
+  db:
+    image: postgres:15-alpine
+    container_name: farmacia_db_dev
+    # Las variables de entorno se cargan desde el archivo .env
+    env_file:
+      - .env
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data/
+    ports:
+      - "5432:5432" # Exponemos el puerto para poder conectarnos desde fuera si es necesario
+    networks:
+      - farmacia_net_dev
+
+  # Servicio del Backend FastAPI para desarrollo
+  backend:
+    container_name: farmacia_backend_dev
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev # Especifica que debe usar el Dockerfile de desarrollo
+    
+    # Comando para iniciar el servidor con recarga en caliente
+    command: ["/app/scripts/wait-for-postgres.sh", "db", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    
+    volumes:
+      # Monta el código local para que los cambios se reflejen al instante
+      - ./backend:/app
+      # Monta el volumen para los archivos subidos
+      - uploaded_files_dev:/app/uploads
+    
+    ports:
+      - "8000:8000"
+      
+    # Carga todas las variables desde el archivo .env
+    env_file:
+      - .env
+
+    depends_on:
+      - db
+    networks:
+      - farmacia_net_dev
+
+volumes:
+  postgres_data_dev:
+  uploaded_files_dev:
+
+networks:
+  farmacia_net_dev:
+    driver: bridge
