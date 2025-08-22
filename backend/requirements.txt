@@ -8,8 +8,10 @@ twilio
 GeoAlchemy2
 openrouteservice
 gunicorn
+GeoAlchemy2
 
 # Fijamos las versiones a unas estables y compatibles
 passlib==1.7.4
 bcrypt==4.1.2
 python-jose[cryptography]==3.3.0
+httpx

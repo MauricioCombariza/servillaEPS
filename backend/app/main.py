@@ -130,21 +130,24 @@ def read_admin_dashboard(current_user: models.Usuario = Depends(get_current_user
 
 @app.post("/pedidos/", response_model=schemas.PedidoRead, status_code=status.HTTP_201_CREATED, tags=["Pedidos"])
 def create_pedido(
-    session: Session = Depends(get_session),
-    # Recibimos los datos como campos de un formulario multipart,
-    # ya que necesitamos manejar la subida de archivos.
+    # --- ORDEN DE PARÁMETROS CORREGIDO ---
+    # 1. Campos de archivo (File) primero.
+    foto_receta: UploadFile = File(description="El archivo de imagen de la receta médica."),
+    
+    # 2. Campos de formulario (Form) después.
     cliente_data: str = Form(description="Un string JSON con los datos del cliente."),
     pedido_data: str = Form(description="Un string JSON con los datos del pedido (dirección, médico, fecha)."),
     items_data: str = Form(description="Un string JSON con la lista de items del pedido."),
-    foto_receta: UploadFile = File(description="El archivo de imagen de la receta médica.")
+    
+    # 3. Dependencias (Depends) al final.
+    session: Session = Depends(get_session)
 ):
     """
     Crea un nuevo pedido a partir de datos de formulario, incluyendo la subida de archivos.
-    Además, asigna automáticamente una zona basada en la dirección de entrega.
+    Asigna automáticamente una zona basada en la dirección de entrega.
     """
     
-    # 1. PARSEO DE DATOS JSON
-    # Convertimos los strings recibidos del formulario a objetos Python.
+    # El cuerpo de la función no cambia, ya era correcto.
     try:
         cliente_dict = json.loads(cliente_data)
         pedido_dict = json.loads(pedido_data)
@@ -152,35 +155,33 @@ def create_pedido(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Formato JSON inválido en los datos del formulario.")
 
-    # 2. MANEJO DE LA SUBIDA DE ARCHIVOS
+    # Manejo de la subida de archivos
     UPLOAD_DIRECTORY = Path("/app/uploads")
     UPLOAD_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
     try:
-        # Creamos un nombre de archivo único para evitar colisiones
         timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
-        file_location = UPLOAD_DIRECTORY / f"receta_{timestamp}_{foto_receta.filename}"
+        # Limpiamos el nombre del archivo para evitar problemas de seguridad
+        safe_filename = Path(foto_receta.filename).name
+        file_location = UPLOAD_DIRECTORY / f"receta_{timestamp}_{safe_filename}"
         
         with open(file_location, "wb+") as file_object:
             shutil.copyfileobj(foto_receta.file, file_object)
         
-        # Guardamos la ruta relativa para almacenarla en la base de datos
         foto_receta_url = str(file_location.relative_to(Path("/app")))
     finally:
         foto_receta.file.close()
 
-    # 3. LÓGICA DE ZONIFICACIÓN
+    # Lógica de zonificación
     direccion_para_zonificar = pedido_dict.get('direccion_entrega', '')
     zona_asignada = zonificacion.asignar_zona_por_direccion(direccion_para_zonificar)
     print(f"Dirección '{direccion_para_zonificar}' asignada a la zona: {zona_asignada}")
 
-    # 4. VERIFICACIÓN Y OBTENCIÓN DE ENTIDADES RELACIONADAS
-    # Asignamos al primer centro de operación disponible para simplificar el MVP
+    # Verificación y obtención de entidades relacionadas
     centro_op_db = session.exec(select(models.CentroOperacion)).first()
     if not centro_op_db:
         raise HTTPException(status_code=404, detail="No hay Centros de Operación configurados en el sistema.")
     
-    # Buscamos al cliente por su documento; si no existe, lo creamos.
     cliente_db = session.exec(select(models.Cliente).where(models.Cliente.numero_documento == cliente_dict['numero_documento'])).first()
     if not cliente_db:
         cliente_db = models.Cliente(**cliente_dict)
@@ -188,28 +189,24 @@ def create_pedido(
         session.commit()
         session.refresh(cliente_db)
 
-    # 5. CREACIÓN DE LAS ENTIDADES EN LA BASE DE DATOS
-    # Creamos el objeto Pedido principal
+    # Creación de las entidades en la base de datos
     pedido_db = models.Pedido(
         **pedido_dict,
         cliente_id=cliente_db.id,
         centro_operacion_id=centro_op_db.id,
         foto_receta_url=foto_receta_url,
-        zona=zona_asignada  # <-- Asignamos la zona calculada
+        zona=zona_asignada
     )
     session.add(pedido_db)
     session.commit()
-    session.refresh(pedido_db) # Obtenemos el ID del pedido recién creado
+    session.refresh(pedido_db)
 
-    # Creamos los Items del Pedido, ahora que tenemos el ID del pedido
     for item_data in items_list:
         item_db = models.ItemPedido(**item_data, pedido_id=pedido_db.id)
         session.add(item_db)
-    
     session.commit()
-    
-    # 6. Refrescamos el objeto Pedido para cargar sus relaciones (items, cliente)
-    # y devolver una respuesta completa.
+
+    # Refrescamos el objeto para devolver una respuesta completa
     session.refresh(pedido_db)
     
     return pedido_db
@@ -296,9 +293,11 @@ def create_test_data(session: Session = Depends(get_session)):
         rol_operador = models.Rol(nombre="operador", descripcion="Operador de Ingreso de Pedidos")
         rol_admin = models.Rol(nombre="admin", descripcion="Administrador del Sistema")
         ciudad_bogota = models.Ciudad(nombre="Bogotá")
-        medicamento_acetaminofen = models.Medicamento(nombre_generico="Acetaminofén 500mg")
+        medicamento1 = models.Medicamento(nombre_generico="Acetaminofén 500mg")
+        medicamento2 = models.Medicamento(nombre_generico="Loratadina 10mg")
+        medicamento3 = models.Medicamento(nombre_generico="Dolex 500mg") 
         
-        session.add_all([rol_operador, rol_admin, ciudad_bogota, medicamento_acetaminofen])
+        session.add_all([rol_operador, rol_admin, ciudad_bogota, medicamento1, medicamento2, medicamento3])
         # Usamos flush para que la BD asigne IDs, pero sin terminar la transacción.
         session.flush()
 
@@ -408,42 +407,56 @@ def crear_ola_picking(
     current_user: models.Usuario = Depends(get_current_user)
 ):
     """
-    Toma todos los pedidos en estado 'aprobado', los agrupa en una nueva
+    Toma TODOS los pedidos en estado 'aprobado', los agrupa en una nueva
     'ola de picking', calcula el total de medicamentos necesarios y actualiza
     el estado de los pedidos a 'en_alistamiento'.
     """
     if not current_user.rol or current_user.rol.nombre not in ["operador", "admin"]:
-        raise HTTPException(status_code=403, detail="Acceso denegado.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado.")
 
-    # 1. Encontrar todos los pedidos aprobados
-    pedidos_aprobados_query = select(models.Pedido).where(
-        models.Pedido.estado == "aprobado"
-    ).options(selectinload(models.Pedido.items))
+    # 1. Obtenemos los pedidos aprobados. Usamos `with_for_update()` para bloquear
+    #    estas filas y evitar que otro proceso las tome al mismo tiempo.
+    pedidos_aprobados_query = select(models.Pedido).where(models.Pedido.estado == "aprobado").with_for_update()
     pedidos_para_ola = session.exec(pedidos_aprobados_query).all()
 
     if not pedidos_para_ola:
         raise HTTPException(status_code=404, detail="No hay pedidos aprobados para procesar.")
 
-    # 2. Calcular los medicamentos requeridos y agrupar IDs de pedidos
-    medicamentos_a_recoger = defaultdict(int)
-    pedidos_ids_en_ola = []
-    
-    for pedido in pedidos_para_ola:
-        pedidos_ids_en_ola.append(pedido.id)
-        for item in pedido.items:
-            # Asumimos que podemos encontrar el medicamento por su nombre solicitado
-            # A futuro, esto debería usar un ID de medicamento
-            medicamentos_a_recoger[item.nombre_medicamento_solicitado] += item.cantidad_solicitada
+    pedidos_ids_en_ola = [p.id for p in pedidos_para_ola]
+    print(f"Pedidos encontrados para la ola: {pedidos_ids_en_ola}")
+
+    # 2. Actualizamos el estado de TODOS los pedidos a 'en_alistamiento'
+    #    Esto ocurre dentro de una transacción. Si algo falla, se revierte.
+    try:
+        for pedido in pedidos_para_ola:
+            pedido.estado = "en_alistamiento"
+            session.add(pedido)
         
-        # 3. Actualizar el estado del pedido
-        pedido.estado = "en_alistamiento"
-        session.add(pedido)
+        session.commit() # Guardamos los cambios de estado en la base de datos
+        print(f"Se actualizaron {len(pedidos_para_ola)} pedidos al estado 'en_alistamiento'.")
+    except Exception as e:
+        session.rollback()
+        print(f"ERROR: Fallo al actualizar estados. Rollback ejecutado. Error: {e}")
+        raise HTTPException(status_code=500, detail="Error de base de datos al crear la ola.")
+
+    # 3. AHORA, con los estados ya guardados, volvemos a cargar los datos
+    #    para asegurarnos de que trabajamos con la información más reciente.
+    #    Esto es un paso extra de seguridad para garantizar la consistencia.
+    pedidos_en_ola_query = select(models.Pedido).where(models.Pedido.id.in_(pedidos_ids_en_ola)).options(
+        selectinload(models.Pedido.items)
+    )
+    pedidos_en_ola = session.exec(pedidos_en_ola_query).all()
     
-    # 4. Construir la respuesta
-    # (En un sistema real, guardaríamos esta ola en una tabla `OlaPicking`)
+    # 4. Calculamos los medicamentos requeridos SUMANDO los de todos los pedidos
+    medicamentos_a_recoger = defaultdict(int)
+    for pedido in pedidos_en_ola:
+        for item in pedido.items:
+            medicamentos_a_recoger[item.nombre_medicamento_solicitado] += item.cantidad_solicitada
+    
+    print(f"Cálculo de medicamentos para la ola: {dict(medicamentos_a_recoger)}")
+
+    # 5. Construimos la respuesta final
     id_ola_generada = int(datetime.utcnow().timestamp())
-    
-    # Buscamos los medicamentos en el catálogo para obtener sus IDs y nombres
     medicamentos_requeridos_response = []
     for nombre, cantidad in medicamentos_a_recoger.items():
         medicamento_db = session.exec(
@@ -451,18 +464,15 @@ def crear_ola_picking(
         ).first()
         medicamentos_requeridos_response.append(
             schemas.MedicamentoRequerido(
-                medicamento_id=medicamento_db.id if medicamento_db else 0, # 0 si no está en catálogo
+                medicamento_id=medicamento_db.id if medicamento_db else 0,
                 nombre_generico=nombre,
                 cantidad_total_requerida=cantidad
             )
         )
 
-    # Confirmamos los cambios en la base de datos
-    session.commit()
-
     return schemas.OlaPickingRead(
         id_ola=id_ola_generada,
-        numero_pedidos=len(pedidos_para_ola),
+        numero_pedidos=len(pedidos_en_ola),
         medicamentos_requeridos=medicamentos_requeridos_response,
         pedidos_ids=pedidos_ids_en_ola
     )
@@ -479,26 +489,38 @@ def get_guia_alistamiento_ola(
         raise HTTPException(status_code=403, detail="Acceso denegado.")
     
     # 1. Encontrar todos los items de pedidos que están en alistamiento
-    query = select(models.ItemPedido).join(models.Pedido).where(
+    query_items = select(models.ItemPedido).join(models.Pedido).where(
         models.Pedido.estado == "en_alistamiento"
     )
-    items_a_alistar = session.exec(query).all()
+    items_a_alistar = session.exec(query_items).all()
 
-    # 2. Calcular los medicamentos requeridos
-    medicamentos_requeridos = defaultdict(int)
-    for item in items_a_alistar:
-        medicamentos_requeridos[item.nombre_medicamento_solicitado] += item.cantidad_solicitada
-
-    if not medicamentos_requeridos:
+    if not items_a_alistar:
         return schemas.GuiaAlistamiento(tareas=[], tareas_pendientes=0, mensaje="No hay tareas de alistamiento pendientes.")
 
-    # 3. Construir la lista de tareas
+    # 2. Calcular los medicamentos requeridos y obtener una lista única de nombres
+    medicamentos_requeridos = defaultdict(int)
+    nombres_medicamentos_unicos = set()
+    for item in items_a_alistar:
+        medicamentos_requeridos[item.nombre_medicamento_solicitado] += item.cantidad_solicitada
+        nombres_medicamentos_unicos.add(item.nombre_medicamento_solicitado)
+    
+    print(f"Medicamentos calculados para la ola: {dict(medicamentos_requeridos)}")
+
+    # 3. Buscar TODOS los medicamentos del catálogo necesarios en UNA SOLA CONSULTA
+    query_medicamentos = select(models.Medicamento).where(
+        models.Medicamento.nombre_generico.in_(nombres_medicamentos_unicos)
+    ).options(selectinload(models.Medicamento.lotes))
+    
+    medicamentos_en_catalogo = session.exec(query_medicamentos).all()
+    
+    # Creamos un diccionario para un acceso rápido
+    catalogo_dict = {med.nombre_generico: med for med in medicamentos_en_catalogo}
+    print(f"Medicamentos encontrados en el catálogo: {list(catalogo_dict.keys())}")
+
+    # 4. Construir la lista de tareas usando los datos que ya tenemos
     lista_de_tareas = []
     for nombre, cantidad in medicamentos_requeridos.items():
-        medicamento_db = session.exec(
-            select(models.Medicamento).where(models.Medicamento.nombre_generico == nombre)
-            .options(selectinload(models.Medicamento.lotes))
-        ).first()
+        medicamento_db = catalogo_dict.get(nombre)
         
         if medicamento_db:
             lista_de_tareas.append(
@@ -508,6 +530,9 @@ def get_guia_alistamiento_ola(
                     lotes_disponibles=medicamento_db.lotes
                 )
             )
+        else:
+            # Log de advertencia si un medicamento pedido no está en el catálogo
+            print(f"ADVERTENCIA: El medicamento solicitado '{nombre}' no se encontró en el catálogo.")
 
     return schemas.GuiaAlistamiento(
         tareas=lista_de_tareas,
@@ -600,6 +625,7 @@ def crear_hoja_de_ruta(
     2. Calcula una ruta optimizada con OpenRouteService.
     3. Asigna los paquetes a un agente de entrega en el orden óptimo.
     """
+    print("--- Petición a /logistica/crear_hoja_de_ruta recibida ---")
     # Verificación de permisos
     if not current_user.rol or current_user.rol.nombre not in ["admin", "operador"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado.")
@@ -1116,3 +1142,59 @@ def get_zonas(session: Session = Depends(get_session)):
     """
     zonas = session.exec(select(models.Zona)).all()
     return zonas
+
+@app.get("/logistica/paquetes/{paquete_id}", response_model=schemas.PaqueteRead, tags=["App Mensajero"])
+def get_detalle_paquete(
+    paquete_id: int,
+    session: Session = Depends(get_session),
+    current_user: models.Usuario = Depends(get_current_user)
+):
+    """
+    Devuelve los detalles completos de un paquete específico.
+    Verifica que el paquete pertenezca a la ruta del mensajero actual.
+    """
+    if not current_user.agente_entrega:
+        raise HTTPException(status_code=403, detail="Usuario no es un agente de entrega.")
+
+    query = select(models.Paquete).where(models.Paquete.id == paquete_id).options(
+        selectinload(models.Paquete.pedido).selectinload(models.Pedido.cliente),
+        selectinload(models.Paquete.pedido).selectinload(models.Pedido.items),
+        selectinload(models.Paquete.hoja_de_ruta) # Cargamos la hoja de ruta para la verificación
+    )
+    paquete = session.exec(query).first()
+
+    if not paquete:
+        raise HTTPException(status_code=404, detail="Paquete no encontrado.")
+    
+    # Verificación de seguridad
+    if paquete.hoja_de_ruta.agente_entrega_id != current_user.agente_entrega.id:
+        raise HTTPException(status_code=403, detail="No tienes permiso para ver este paquete.")
+        
+    return paquete
+
+@app.get("/logistica/hoja_de_ruta/{ruta_id}", response_model=schemas.HojaDeRutaRead, tags=["Logística"])
+def get_detalle_hoja_de_ruta(
+    ruta_id: int,
+    session: Session = Depends(get_session),
+    current_user: models.Usuario = Depends(get_current_user)
+):
+    """Devuelve los detalles completos de una hoja de ruta específica."""
+    if not current_user.rol or current_user.rol.nombre not in ["admin", "operador"]:
+        raise HTTPException(status_code=403, detail="Acceso denegado.")
+
+    # Usamos la misma consulta compleja de carga anidada que en la creación
+    query = select(models.HojaDeRuta).where(models.HojaDeRuta.id == ruta_id).options(
+        selectinload(models.HojaDeRuta.agente_entrega),
+        selectinload(models.HojaDeRuta.paquetes).selectinload(models.Paquete.pedido).selectinload(models.Pedido.cliente),
+        selectinload(models.HojaDeRuta.paquetes).selectinload(models.Paquete.pedido).selectinload(models.Pedido.items)
+    )
+    ruta = session.exec(query).first()
+
+    if not ruta:
+        raise HTTPException(status_code=404, detail="Hoja de ruta no encontrada.")
+    
+    # Ordenamos los paquetes por número de parada para la visualización
+    if ruta.paquetes:
+        ruta.paquetes.sort(key=lambda p: p.numero_parada or 0)
+        
+    return ruta

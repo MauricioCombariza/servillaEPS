@@ -159,10 +159,9 @@ class TransaccionFinanciera(SQLModel, table=True):
     paquete_id: int = Field(foreign_key="paquete.id")
     # No necesitamos un back_populates aquí si no vamos a navegar de Paquete a Transacción
 
+
 class Zona(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    nombre: str = Field(unique=True, index=True)
-    
-    # Columna especial para la geometría del polígono.
-    # Usamos SRID 4326, el sistema de coordenadas estándar (WGS 84).
-    geom: str = Field(sa_column=Column(Geometry('POLYGON', srid=4326)))
+    nombre: str
+    # Definimos la columna con el tipo de GeoAlchemy
+    geom: bytes = Field(sa_column=Column(Geometry('POLYGON', srid=4326)))

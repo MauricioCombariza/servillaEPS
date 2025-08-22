@@ -1,43 +1,36 @@
 # docker-compose.yml
 # Archivo de ejemplo para una configuración tipo producción.
-# Render.com NO usa este archivo directamente, pero sirve como referencia.
 
-version: '3.8'
+version: '3.8' # La advertencia sobre 'version' es normal, podemos ignorarla.
 
 services:
-  # En producción, la base de datos debería ser un servicio gestionado (como el de Render).
-  # Este servicio 'db' es solo para un ejemplo de despliegue autocontenido.
+  # En producción, la base de datos debería ser un servicio gestionado.
   db:
     image: postgres:15-alpine
     container_name: farmacia_db_prod
-    env_file:
-      - .env.prod # Usaría un archivo de entorno de producción
+    # En un despliegue real, las variables se inyectarían de forma segura,
+    # no desde un archivo local. Por eso eliminamos 'env_file'.
+    # environment:
+    #   - POSTGRES_USER=${POSTGRES_USER}
+    # ... etc
     volumes:
       - postgres_data_prod:/var/lib/postgresql/data/
     networks:
       - farmacia_net_prod
-    # En producción, NO se recomienda exponer el puerto de la BD a internet.
 
   # Servicio del Backend FastAPI para producción
   backend:
     container_name: farmacia_backend_prod
     build:
       context: ./backend
-      # Usa el Dockerfile por defecto (el de producción)
       dockerfile: Dockerfile 
     
-    # El comando de inicio está definido dentro del Dockerfile con la instrucción CMD
-    
     volumes:
-      # En producción, el código está DENTRO de la imagen. No montamos el código local.
-      # Solo montamos el volumen para los archivos subidos.
       - uploaded_files_prod:/app/uploads
 
-    # No exponemos puertos directamente, un proxy inverso como Nginx se encargaría de eso.
+    # En un despliegue real, estas variables las provee la plataforma (Render).
+    # Eliminamos 'env_file' para evitar la advertencia.
     
-    env_file:
-      - .env.prod # Carga las variables de entorno de producción
-
     depends_on:
       - db
     networks:

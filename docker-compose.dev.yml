@@ -6,15 +6,15 @@ version: '3.8'
 services:
   # Servicio de la Base de Datos PostgreSQL para desarrollo
   db:
-    image: postgres:15-alpine
+    # Cambiamos de 'postgres:15-alpine' a 'postgis/postgis'
+    image: postgis/postgis:15-3.4
     container_name: farmacia_db_dev
-    # Las variables de entorno se cargan desde el archivo .env
     env_file:
       - .env
     volumes:
       - postgres_data_dev:/var/lib/postgresql/data/
     ports:
-      - "5432:5432" # Exponemos el puerto para poder conectarnos desde fuera si es necesario
+      - "5432:5432"
     networks:
       - farmacia_net_dev
 
