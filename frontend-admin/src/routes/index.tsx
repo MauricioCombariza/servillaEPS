@@ -20,6 +20,8 @@ import ConciliacionPage from '../pages/Cierre/ConciliacionPage';
 import MobileLayout from '../components/layout/MobileLayout';
 import PaginaRutaMensajero from '../pages/Mensajero/PaginaRutaMensajero';
 import PaginaEscaner from '../pages/Mensajero/PaginaEscaner';
+import PaginaDetalleParada from '../pages/Mensajero/PaginaDetalleParada';
+import DetalleRutaPage from '../pages/Logistica/DetalleRutaPage';
 
 // Creamos el enrutador con la estructura jerárquica
 const router = createBrowserRouter([
@@ -38,6 +40,10 @@ const router = createBrowserRouter([
           children: [
             { index: true, element: <PaginaRutaMensajero /> },
             { path: 'escanear', element: <PaginaEscaner /> },
+            {
+            path: 'parada/:paqueteId', // <-- Nueva ruta con parámetro dinámico
+            element: <PaginaDetalleParada />,
+          },
           ]
         },
   // Contenedor de rutas protegidas
@@ -84,6 +90,10 @@ const router = createBrowserRouter([
         {
           path: 'cierre/conciliacion', // <-- Nueva ruta
           element: <ConciliacionPage />,
+        },
+        {
+          path: 'logistica/rutas_activas/:rutaId', // Ruta con parámetro
+          element: <DetalleRutaPage />,
         },
           
         ],

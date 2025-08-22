@@ -13,6 +13,12 @@ export type MedicamentoRead = {
   requiere_refrigeracion: boolean;
 };
 
+// Tipo para el payload de una entrega fallida
+export type RegistroEntregaFallida = {
+  motivo_fallo: string;
+};
+
+
 export type LoteMedicamentoRead = {
   id: number;
   numero_lote_proveedor: string;
@@ -172,7 +178,35 @@ export const getRutasActivas = async (): Promise<HojaDeRutaRead[]> => {
   return response.data;
 };
 
+export const getMiRutaActiva = async (): Promise<HojaDeRutaRead> => {
+  const response = await apiClient.get<HojaDeRutaRead>('/logistica/mi_ruta_activa');
+  return response.data;
+};
+
 export const getRutasFinalizadas = async (): Promise<HojaDeRutaRead[]> => {
   const response = await apiClient.get<HojaDeRutaRead[]>('/cierre/rutas_finalizadas');
+  return response.data;
+};
+
+export const getDetallePaquete = async (paqueteId: number): Promise<PaqueteRead> => {
+  const response = await apiClient.get<PaqueteRead>(`/logistica/paquetes/${paqueteId}`);
+  return response.data;
+};
+
+export const marcarPaqueteEntregado = async (paqueteId: number): Promise<PaqueteRead> => {
+  const response = await apiClient.patch<PaqueteRead>(`/logistica/paquetes/${paqueteId}/entregado`);
+  return response.data;
+};
+
+export const marcarPaqueteFallido = async (
+  { paqueteId, motivo }: { paqueteId: number; motivo: string }
+): Promise<PaqueteRead> => {
+  const data: RegistroEntregaFallida = { motivo_fallo: motivo };
+  const response = await apiClient.patch<PaqueteRead>(`/logistica/paquetes/${paqueteId}/fallido`, data);
+  return response.data;
+};
+
+export const getDetalleHojaDeRuta = async (rutaId: number): Promise<HojaDeRutaRead> => {
+  const response = await apiClient.get<HojaDeRutaRead>(`/logistica/hoja_de_ruta/${rutaId}`);
   return response.data;
 };

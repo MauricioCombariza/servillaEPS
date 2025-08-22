@@ -44,18 +44,26 @@ const AsignacionRutas: React.FC = () => {
   });
   
   const handleAssign = () => {
+    console.log("Botón 'Asignar' presionado."); // <-- LOG 1
+
     if (selectedAgentId && selectedZone) {
+      console.log(`Intentando asignar zona ${selectedZone} a agente ${selectedAgentId}`); // <-- LOG 2
+      
       const dataParaEnviar: HojaDeRutaCreate = {
         agente_entrega_id: parseInt(selectedAgentId, 10),
         zona: selectedZone,
         tipo_ruta: 'ENTREGA_FINAL'
       };
-      // Ahora esta llamada es válida porque 'mutate' espera un objeto HojaDeRutaCreate
+      
+      console.log("Datos a enviar a la mutación:", dataParaEnviar); // <-- LOG 3
       crearRutaMutation.mutate(dataParaEnviar);
+      
     } else {
+      console.log("Falta seleccionar zona o agente."); // <-- LOG 4
       toast.error("Por favor, selecciona una zona y un mensajero.");
     }
   };
+
 
   const paquetesListos = paquetes || [];
 
